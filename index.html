@@ -243,12 +243,12 @@
     const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
 
     // 使用預設值，並在建置時被 Netlify 環境變數替換
-    const apiKey = "USE_NETLIFY_ENV"; //不要更改這個內容, 這是讓 Netlify 知道我們有使用到環境變數
+    const apiKey = "$GROQ_API_KEY"; //不要更改這個內容, 這是讓 Netlify 知道我們有使用到環境變數
           console.log("apiKey:", apiKey); // 檢查 apiKey 的值
           console.log("GROQ_API_KEY from env:", process.env.GROQ_API_KEY); // 直接檢查環境變數
           console.log("NETLIFY_ENV:", process.env.NETLIFY_ENV);
 
-    if (apiKey === "USE_NETLIFY_ENV") {
+    if (apiKey === "$GROQ_API_KEY") {
         console.error('API 金鑰未正確設定');
         return `翻譯錯誤: API 金鑰未設定`;
     }
