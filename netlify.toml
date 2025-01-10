@@ -1,5 +1,5 @@
 [build]
-  command = "sed -i 's/USE_NETLIFY_ENV/${GROQ_API_KEY}/g' index.html && echo 'API key replaced'"
+  command = "sed -i 's/USE_NETLIFY_ENV/\\$GROQ_API_KEY/g' index.html && echo 'API key replaced'"
   publish = "."
 
 [[headers]]
