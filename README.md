@@ -1,16 +1,343 @@
-## Hi there 👋
+<!DOCTYPE html>
+<html>
+<head>
+  <title>即時語音轉文字 (中英雙語 + 翻譯)</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    .text-box {
+      border: 1px solid #ccc;
+      padding: 10px;
+      min-height: 2em;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+    }
+    .confident {
+      color: black;
+    }
+    .less-confident {
+      color: grey;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <button id="startButton">開始</button>
+    <button id="stopButton" disabled>停止</button>
+    <button id="increaseFontButton">放大字體</button>
+    <button id="decreaseFontButton">縮小字體</button>
+    <button id="downloadSrtButton" disabled>下載 .srt</button>
 
-<!--
-**nerans/nerans** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+    <label for="languageSelect">選擇語言:</label>
+    <select id="languageSelect">
+      <option value="en-US">英文 (en-US)</option>
+      <option value="zh-TW">繁體中文 (zh-TW)</option>
+    </select>
 
-Here are some ideas to get you started:
+    <label for="fontFamilySelect">字型:</label>
+    <select id="fontFamilySelect">
+      <option value="sans-serif">Sans-serif</option>
+      <option value="serif">Serif</option>
+      <option value="monospace">Monospace</option>
+      <option value="Arial">Arial</option>
+      <option value="Helvetica">Helvetica</option>
+      <option value="Times New Roman">Times New Roman</option>
+      <option value="Courier New">Courier New</option>
+      <option value="Verdana">Verdana</option>
+      <option value="Georgia">Georgia</option>
+      <option value="Palatino">Palatino</option>
+      <option value="Garamond">Garamond</option>
+      <option value="Bookman">Bookman</option>
+      <option value="Comic Sans MS">Comic Sans MS</option>
+      <option value="Trebuchet MS">Trebuchet MS</option>
+      <option value="Arial Black">Arial Black</option>
+      <option value="Impact">Impact</option>
+      <option value="Tahoma">Tahoma</option>
+      <option value="Consolas">Consolas</option>
+    </select>
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+    <label for="fontWeightSelect">粗細:</label>
+    <select id="fontWeightSelect">
+      <option value="normal">Normal</option>
+      <option value="bold">Bold</option>
+    </select>
+  </div>
+
+  <div id="textBoxes">
+    <div class="text-box" id="textBox1"></div>
+    <div class="text-box" id="textBox2"></div>
+    <div class="text-box" id="textBox3"></div>
+  </div>
+
+  <script>
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
+    const increaseFontButton = document.getElementById('increaseFontButton');
+    const decreaseFontButton = document.getElementById('decreaseFontButton');
+    const downloadSrtButton = document.getElementById('downloadSrtButton');
+    const languageSelect = document.getElementById('languageSelect');
+    const fontFamilySelect = document.getElementById('fontFamilySelect');
+    const fontWeightSelect = document.getElementById('fontWeightSelect');
+    const textBoxes = document.getElementsByClassName('text-box');
+    let currentTextBoxIndex = 0;
+    let recognition;
+
+    // 語音結果佇列 (現在只儲存 transcript 和 isFinal)
+    let transcriptQueue = [];
+    let isProcessingQueue = false;
+
+    // SRT 字幕資料
+    let srtContent = "";
+    let srtSequence = 1;
+    let startTime = null;
+    let relativeEndTime = 0;
+    let lastFinalTranscript = "";
+
+    // 移除全域的 recognition.lang 設定
+
+    async function processTranscriptQueue() {
+      if (transcriptQueue.length === 0) {
+        isProcessingQueue = false;
+        return;
+      }
+
+      const { transcript, isFinal, timestamp } = transcriptQueue.shift();
+      const targetTextBox = textBoxes[currentTextBoxIndex];
+
+      if (isFinal) {
+        // 計算相對時間 (相對於 startTime)
+        const resultRelativeTime = (timestamp - startTime) / 1000;
+        // 偵測語言
+        let detectedLanguage = await detectLanguage(transcript);
+
+        // 翻譯
+        let translatedText = await translateText(transcript, detectedLanguage);
+
+        // 移除之前所有內容，只顯示最終結果和翻譯
+        targetTextBox.innerHTML = `<span>${transcript}</span><br><span style="color: blue;">${translatedText}</span><br>`;
+
+        // 計算時間碼並添加到 srtContent
+        const resultStartTime = relativeEndTime;
+        const resultEndTime = resultRelativeTime;
+        const formattedStartTime = formatSrtTime(resultStartTime);
+        const formattedEndTime = formatSrtTime(resultEndTime);
+
+        srtContent += `${srtSequence}\n${formattedStartTime} --> ${formattedEndTime}\n${transcript}\n${translatedText}\n\n`;
+        srtSequence++;
+        relativeEndTime = resultEndTime; // 更新 relativeEndTime
+
+        // 更新 lastFinalTranscript
+        lastFinalTranscript = transcript;
+
+        // 換行到下一個 textBox
+        currentTextBoxIndex = (currentTextBoxIndex + 1) % textBoxes.length;
+        textBoxes[currentTextBoxIndex].innerHTML = '';
+        downloadSrtButton.disabled = false;
+      }
+
+      setTimeout(processTranscriptQueue, 10);
+    }
+
+    startButton.onclick = () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      // 在 recognition.start() 之前設定語言
+      recognition.lang = languageSelect.value;
+
+      recognition.onresult = (event) => {
+          let interimTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            const isFinal = event.results[i].isFinal;
+
+            if (isFinal) {
+              transcriptQueue.push({ transcript, isFinal, timestamp: event.timeStamp });
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+          // 只有當 interim 結果與上一個 final 結果不同時才顯示，避免重複或錯誤的灰色字
+          if (interimTranscript.trim() !== lastFinalTranscript.trim()) {
+              textBoxes[currentTextBoxIndex].innerHTML = `<span style="opacity: 0.5;">${interimTranscript}</span>`;
+          }
+
+          if (!isProcessingQueue && transcriptQueue.length > 0) {
+            isProcessingQueue = true;
+            processTranscriptQueue();
+          }
+      };
+
+      recognition.onend = () => {
+        console.log('語音辨識已結束');
+        startButton.disabled = false;
+        stopButton.disabled = true;
+        if (isProcessingQueue) {
+            transcriptQueue.push({ transcript: '', isFinal: true, timestamp: performance.now() });
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('語音辨識錯誤:', event.error);
+        textBoxes[currentTextBoxIndex].innerHTML += '<br>發生錯誤，請重試。<br>';
+        startButton.disabled = false;
+        stopButton.disabled = true;
+      };
+
+      startTime = performance.now();
+      relativeEndTime = 0;
+      recognition.start();
+      startButton.disabled = true;
+      stopButton.disabled = false;
+      downloadSrtButton.disabled = true;
+      for (let i = 0; i < textBoxes.length; i++) {
+        textBoxes[i].innerHTML = '';
+      }
+      currentTextBoxIndex = 0;
+      transcriptQueue = [];
+      isProcessingQueue = false;
+      srtContent = "";
+      srtSequence = 1;
+      console.log('語音辨識開始');
+    };
+
+    stopButton.onclick = () => {
+      recognition.stop();
+      console.log('語音辨識已停止');
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    };
+
+    // 格式化時間為 SRT 格式 (HH:MM:SS,mmm)
+    function formatSrtTime(timeInSeconds) {
+        if (isNaN(timeInSeconds)) {
+          return "00:00:00,000";
+        }
+        const date = new Date(timeInSeconds * 1000);
+        const hours = date.getUTCHours().toString().padStart(2, '0');
+        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+        const milliseconds = date.getUTCMilliseconds().toString().padStart(3, '0');
+        return `${hours}:${minutes}:${seconds},${milliseconds}`;
+    }
+
+    // 偵測語言 (簡易版 - 實際應用需更精確的語言偵測模型)
+    async function detectLanguage(text) {
+      // 使用正則表達式判斷語言
+      const isChinese = /[\u4e00-\u9fa5]/.test(text);
+      return isChinese ? 'zh-TW' : 'en-US';
+    }
+
+    // 翻譯文字 (使用 GroqCloud API)
+    async function translateText(text, detectedLanguage) {
+        const targetLanguage = detectedLanguage === 'zh-TW' ? 'en-US' : 'zh-TW';
+        const model = 'llama-3.3-70b-versatile';
+        const systemPrompt = "You are a proficient translator between Traditional Chinese and English. Please understand the context and provide a natural and fluent translation. Offer only one, optimal translation result without any additional text or explanations. **Additionally, please understand the context of the conversation when answering. If you encounter Chinese romanization (Pinyin), please interpret the meaning and respond in Traditional Chinese.**";
+        const prompt = detectedLanguage === 'zh-TW' ? `Translate the following text to English: "${text}"` : `Translate the following text to 繁體中文: "${text}"`;
+
+        const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+        const apiKey = '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';
+
+        let retries = 0;
+        const maxRetries = 3;
+        let retryAfter = 0;
+
+        while (retries < maxRetries) {
+          try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  model: model,
+                  messages: [
+                    {
+                      role: "system",
+                      content: systemPrompt,
+                    },
+                    {
+                      role: "user",
+                      content: prompt,
+                    },
+                  ],
+                  temperature: 0.5, 
+                  max_tokens: 200,  
+                  top_p: 1,
+                  stop: null,
+                  stream: false,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.choices && data.choices[0].message.content) {
+              return data.choices[0].message.content;
+            } else if (response.status === 429) {
+              retryAfter = parseInt(response.headers.get('retry-after')) || 2;
+              console.warn(`Rate limit exceeded, retrying after ${retryAfter} seconds...`);
+              await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+              retries++;
+            } else {
+              console.error('Groq API 翻譯錯誤:', data);
+              return `翻譯錯誤: ${text}`;
+            }
+          } catch (error) {
+            console.error('Groq API 呼叫錯誤:', error);
+            return `翻譯錯誤: ${text}`;
+          }
+        }
+
+        console.error(`Max retries exceeded (${maxRetries}) for text: ${text}`);
+        return `翻譯錯誤: ${text}`;
+    }
+
+    // 下載 SRT 文件
+    downloadSrtButton.onclick = () => {
+      const blob = new Blob([srtContent], { type: "text/srt" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "subtitle.srt";
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    // 放大字體
+    increaseFontButton.onclick = () => {
+      for (let i = 0; i < textBoxes.length; i++) {
+        const currentFontSize = parseFloat(window.getComputedStyle(textBoxes[i]).fontSize);
+        textBoxes[i].style.fontSize = `${currentFontSize * 1.1}px`;
+      }
+    };
+
+    // 縮小字體
+    decreaseFontButton.onclick = () => {
+      for (let i = 0; i < textBoxes.length; i++) {
+        const currentFontSize = parseFloat(window.getComputedStyle(textBoxes[i]).fontSize);
+        textBoxes[i].style.fontSize = `${currentFontSize / 1.1}px`;
+      }
+    };
+
+    // 更改字型
+    fontFamilySelect.onchange = () => {
+      for (let i = 0; i < textBoxes.length; i++) {
+        textBoxes[i].style.fontFamily = fontFamilySelect.value;
+      }
+    };
+
+    // 更改粗細
+    fontWeightSelect.onchange = () => {
+      for (let i = 0; i < textBoxes.length; i++) {
+        textBoxes[i].style.fontWeight = fontWeightSelect.value;
+      }
+    };
+  </script>
+</body>
+</html>
