@@ -1,0 +1,21 @@
+[build]
+  command = "echo 'No build command needed for a static site'"
+  publish = "."
+
+[[headers]]
+  for = "/*"
+    [headers.values]
+      X-Content-Type-Options = "nosniff"
+
+[context.production.environment]
+  # 從 Netlify 環境變數中取得 GROQ_API_KEY
+  GROQ_API_KEY = "$GROQ_API_KEY"
+
+[context.deploy-preview.environment]
+  GROQ_API_KEY = "$GROQ_API_KEY"
+
+[context.branch-deploy.environment]
+  GROQ_API_KEY = "$GROQ_API_KEY"
+
+[context.dev.environment]
+  GROQ_API_KEY = "$GROQ_API_KEY"
