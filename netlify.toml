@@ -1,5 +1,5 @@
 [build]
-  command = "echo 'No build command needed for a static site'"
+  command = "echo 'Still no build command needed for a static site'"
   publish = "."
 
 [[headers]]
