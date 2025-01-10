@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html>
 <head>
   <title>即時語音轉文字 (中英雙語 + 翻譯)</title>
