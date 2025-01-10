@@ -1,5 +1,5 @@
 [build]
-  command = "echo 'Still no build command needed for a static site'"
+  command = "sed -i 's/USE_NETLIFY_ENV/${GROQ_API_KEY}/g' index.html && echo 'API key replaced'"
   publish = "."
 
 [[headers]]
@@ -8,7 +8,6 @@
       X-Content-Type-Options = "nosniff"
 
 [context.production.environment]
-  # 從 Netlify 環境變數中取得 GROQ_API_KEY
   GROQ_API_KEY = "$GROQ_API_KEY"
 
 [context.deploy-preview.environment]
