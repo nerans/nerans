@@ -235,21 +235,27 @@
 
     // 翻譯文字 (使用 GroqCloud API)
         async function translateText(text, detectedLanguage) {
-        const targetLanguage = detectedLanguage === 'zh-TW' ? 'en-US' : 'zh-TW';
-        const model = 'llama-3.3-70b-versatile';
-        const systemPrompt = "You are a proficient translator between Traditional Chinese and English. Please understand the context and provide a natural and fluent translation. Offer only one, optimal translation result without any additional text or explanations. **Additionally, please understand the context of the conversation when answering. If you encounter Chinese romanization (Pinyin), please interpret the meaning and respond in Traditional Chinese.**";
-        const prompt = detectedLanguage === 'zh-TW' ? `Translate the following text to English: "${text}"` : `Translate the following text to 繁體中文: "${text}"`;
+    const targetLanguage = detectedLanguage === 'zh-TW' ? 'en-US' : 'zh-TW';
+    const model = 'llama-3.3-70b-versatile';
+    const systemPrompt = "You are a proficient translator between Traditional Chinese and English. Please understand the context and provide a natural and fluent translation. Offer only one, optimal translation result without any additional text or explanations. **Additionally, please understand the context of the conversation when answering. If you encounter Chinese romanization (Pinyin), please interpret the meaning and respond in Traditional Chinese.**";
+    const prompt = detectedLanguage === 'zh-TW' ? `Translate the following text to English: "${text}"` : `Translate the following text to 繁體中文: "${text}"`;
 
-        const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-        // 使用 Netlify 的方式取得環境變數
-        const apiKey = window.env.GROQ_API_KEY;
+    const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
 
-        let retries = 0;
-        const maxRetries = 3;
-        let retryAfter = 0;
+    // 使用預設值，並在建置時被 Netlify 環境變數替換
+    const apiKey = "USE_NETLIFY_ENV"; //不要更改這個內容, 這是讓 Netlify 知道我們有使用到環境變數
 
-        while (retries < maxRetries) {
-          try {
+    if (apiKey === "USE_NETLIFY_ENV") {
+        console.error('API 金鑰未正確設定');
+        return `翻譯錯誤: API 金鑰未設定`;
+    }
+
+    let retries = 0;
+    const maxRetries = 3;
+    let retryAfter = 0;
+
+    while (retries < maxRetries) {
+        try {
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
@@ -257,47 +263,47 @@
                     'Authorization': `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify({
-                  model: model,
-                  messages: [
-                    {
-                      role: "system",
-                      content: systemPrompt,
-                    },
-                    {
-                      role: "user",
-                      content: prompt,
-                    },
-                  ],
-                  temperature: 0.5, 
-                  max_tokens: 200,  
-                  top_p: 1,
-                  stop: null,
-                  stream: false,
+                    model: model,
+                    messages: [
+                        {
+                            role: "system",
+                            content: systemPrompt,
+                        },
+                        {
+                            role: "user",
+                            content: prompt,
+                        },
+                    ],
+                    temperature: 0.5,
+                    max_tokens: 200,
+                    top_p: 1,
+                    stop: null,
+                    stream: false,
                 }),
             });
 
             const data = await response.json();
 
             if (response.ok && data.choices && data.choices[0].message.content) {
-              return data.choices[0].message.content;
+                return data.choices[0].message.content;
             } else if (response.status === 429) {
-              retryAfter = parseInt(response.headers.get('retry-after')) || 2;
-              console.warn(`Rate limit exceeded, retrying after ${retryAfter} seconds...`);
-              await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-              retries++;
+                retryAfter = parseInt(response.headers.get('retry-after')) || 2;
+                console.warn(`Rate limit exceeded, retrying after ${retryAfter} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                retries++;
             } else {
-              console.error('Groq API 翻譯錯誤:', data);
-              return `翻譯錯誤: ${text}`;
+                console.error('Groq API 翻譯錯誤:', data);
+                return `翻譯錯誤: ${text}`;
             }
-          } catch (error) {
+        } catch (error) {
             console.error('Groq API 呼叫錯誤:', error);
             return `翻譯錯誤: ${text}`;
-          }
         }
-
-        console.error(`Max retries exceeded (${maxRetries}) for text: ${text}`);
-        return `翻譯錯誤: ${text}`;
     }
+
+    console.error(`Max retries exceeded (${maxRetries}) for text: ${text}`);
+    return `翻譯錯誤: ${text}`;
+}
 
     // 下載 SRT 文件
     downloadSrtButton.onclick = () => {
