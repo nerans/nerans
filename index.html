@@ -21,58 +21,73 @@
     .less-confident {
       color: grey;
     }
+    #api-key-form {
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
-  <div>
-    <button id="startButton">開始</button>
-    <button id="stopButton" disabled>停止</button>
-    <button id="increaseFontButton">放大字體</button>
-    <button id="decreaseFontButton">縮小字體</button>
-    <button id="downloadSrtButton" disabled>下載 .srt</button>
-
-    <label for="languageSelect">選擇語言:</label>
-    <select id="languageSelect">
-      <option value="en-US">英文 (en-US)</option>
-      <option value="zh-TW">繁體中文 (zh-TW)</option>
-    </select>
-
-    <label for="fontFamilySelect">字型:</label>
-    <select id="fontFamilySelect">
-      <option value="sans-serif">Sans-serif</option>
-      <option value="serif">Serif</option>
-      <option value="monospace">Monospace</option>
-      <option value="Arial">Arial</option>
-      <option value="Helvetica">Helvetica</option>
-      <option value="Times New Roman">Times New Roman</option>
-      <option value="Courier New">Courier New</option>
-      <option value="Verdana">Verdana</option>
-      <option value="Georgia">Georgia</option>
-      <option value="Palatino">Palatino</option>
-      <option value="Garamond">Garamond</option>
-      <option value="Bookman">Bookman</option>
-      <option value="Comic Sans MS">Comic Sans MS</option>
-      <option value="Trebuchet MS">Trebuchet MS</option>
-      <option value="Arial Black">Arial Black</option>
-      <option value="Impact">Impact</option>
-      <option value="Tahoma">Tahoma</option>
-      <option value="Consolas">Consolas</option>
-    </select>
-
-    <label for="fontWeightSelect">粗細:</label>
-    <select id="fontWeightSelect">
-      <option value="normal">Normal</option>
-      <option value="bold">Bold</option>
-    </select>
+  <div id="api-key-form">
+    <label for="apiKeyInput">請輸入您的 Groq API Key:</label>
+    <input type="password" id="apiKeyInput" placeholder="Groq API Key">
+    <button id="apiKeySubmit">提交</button>
   </div>
 
-  <div id="textBoxes">
-    <div class="text-box" id="textBox1"></div>
-    <div class="text-box" id="textBox2"></div>
-    <div class="text-box" id="textBox3"></div>
+  <div id="main-content" style="display: none;">
+    <div>
+      <button id="startButton">開始</button>
+      <button id="stopButton" disabled>停止</button>
+      <button id="increaseFontButton">放大字體</button>
+      <button id="decreaseFontButton">縮小字體</button>
+      <button id="downloadSrtButton" disabled>下載 .srt</button>
+
+      <label for="languageSelect">選擇語言:</label>
+      <select id="languageSelect">
+        <option value="en-US">英文 (en-US)</option>
+        <option value="zh-TW">繁體中文 (zh-TW)</option>
+      </select>
+
+      <label for="fontFamilySelect">字型:</label>
+      <select id="fontFamilySelect">
+        <option value="sans-serif">Sans-serif</option>
+        <option value="serif">Serif</option>
+        <option value="monospace">Monospace</option>
+        <option value="Arial">Arial</option>
+        <option value="Helvetica">Helvetica</option>
+        <option value="Times New Roman">Times New Roman</option>
+        <option value="Courier New">Courier New</option>
+        <option value="Verdana">Verdana</option>
+        <option value="Georgia">Georgia</option>
+        <option value="Palatino">Palatino</option>
+        <option value="Garamond">Garamond</option>
+        <option value="Bookman">Bookman</option>
+        <option value="Comic Sans MS">Comic Sans MS</option>
+        <option value="Trebuchet MS">Trebuchet MS</option>
+        <option value="Arial Black">Arial Black</option>
+        <option value="Impact">Impact</option>
+        <option value="Tahoma">Tahoma</option>
+        <option value="Consolas">Consolas</option>
+      </select>
+
+      <label for="fontWeightSelect">粗細:</label>
+      <select id="fontWeightSelect">
+        <option value="normal">Normal</option>
+        <option value="bold">Bold</option>
+      </select>
+    </div>
+
+    <div id="textBoxes">
+      <div class="text-box" id="textBox1"></div>
+      <div class="text-box" id="textBox2"></div>
+      <div class="text-box" id="textBox3"></div>
+    </div>
   </div>
 
   <script>
+    const apiKeyForm = document.getElementById('api-key-form');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const apiKeySubmit = document.getElementById('apiKeySubmit');
+    const mainContent = document.getElementById('main-content');
     const startButton = document.getElementById('startButton');
     const stopButton = document.getElementById('stopButton');
     const increaseFontButton = document.getElementById('increaseFontButton');
@@ -84,6 +99,7 @@
     const textBoxes = document.getElementsByClassName('text-box');
     let currentTextBoxIndex = 0;
     let recognition;
+    let groqApiKey; // 儲存使用者輸入的 API Key
 
     // 語音結果佇列 (現在只儲存 transcript 和 isFinal)
     let transcriptQueue = [];
@@ -97,6 +113,18 @@
     let lastFinalTranscript = "";
 
     // 移除全域的 recognition.lang 設定
+
+    // 提交 API Key 的事件處理
+    apiKeySubmit.onclick = () => {
+      groqApiKey = apiKeyInput.value;
+      if (groqApiKey) {
+        apiKeyForm.style.display = 'none';
+        mainContent.style.display = 'block';
+        alert('API Key 已設定，可以開始使用語音轉文字功能。');
+      } else {
+        alert('請輸入 Groq API Key');
+      }
+    };
 
     async function processTranscriptQueue() {
       if (transcriptQueue.length === 0) {
@@ -142,6 +170,11 @@
     }
 
     startButton.onclick = () => {
+      if (!groqApiKey) {
+        alert('請先輸入 Groq API Key');
+        return;
+      }
+
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SpeechRecognition();
       recognition.interimResults = true;
@@ -241,7 +274,8 @@
         const prompt = detectedLanguage === 'zh-TW' ? `Translate the following text to English: "${text}"` : `Translate the following text to 繁體中文: "${text}"`;
 
         const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-        const apiKey = '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';
+        // 使用全域變數 groqApiKey
+        const apiKey = groqApiKey;
 
         let retries = 0;
         const maxRetries = 3;
